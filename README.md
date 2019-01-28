@@ -3,4 +3,5 @@
  
  ![locations of all pedons used to develop MIR models](https://github.com/whrc/Model-Choice-Using-MIR-Spectroscopy/blob/master/Figure.jpg)
  
- The manuscript entitled "Accurate and precise prediction of soil properties from a large mid infrared spectral library" has been developed using the script contain in this repository and is under review in soil systems journal.
+Please cite the manuscript as follows:
+Dangal, SRS, J. Sanderman, S. Wills, L. Ramirez-Lopez (2019) "Accurate and precise prediction of soil properties from a large mid infrared spectral library" In press (Soil Systems).
