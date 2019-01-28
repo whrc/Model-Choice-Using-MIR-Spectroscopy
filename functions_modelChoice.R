@@ -33,6 +33,31 @@ plot.plsr <- function(x,y, name, xaxes, units){
 }
 
 
+#process to screenout outliers from the model 
+#this function provides optimum sd value to retain the threshold number of samples (in %)
+#in this case theshold level is set to 1 (vec <1)
+optimum_sd_outlier <- function(x,y, temp.sd,.....)
+{
+  mod <- lm(y~x)
+  reg <- fitted(mod)
+  stdev <- sd(reg)
+  vec <- vector(mode="double", length= length(temp.sd))
+  len.outl <- vector(mode = "numeric", length=length(temp.sd))
+  for(i in 1:length(temp.sd)) 
+      {
+        lwr <- reg - temp.sd[i] * stdev
+        upr <- reg + temp.sd[i] * stdev
+        tmp.index <- which(y < upr & y > lwr)
+        len.outl[i] <- length(y) - length(tmp.index)
+        vec[i] <- len.outl[i]/length(y) * 100
+  }
+  sd.index <- which(vec <= 1)[1]
+  sd.value <- temp.sd[sd.index]
+  #cat(sd.value, len.outl[sd.index],  "\n")
+  return(c(sd.value, len.outl[sd.index]))
+}
+
+#data sets with fitted line +/- 1sd are only retained
 outlier <- function(x,y,sd,.....)
 {
   mod <- lm(y~x)

@@ -12,7 +12,8 @@ library(doParallel)
 library(hexbin)
 library(RColorBrewer)
 
-source("C:/Users/sdangal/Documents/ModelChoice_17SEPT2018/outlier/functions_calibTransfer.R")
+source("functions_modelChoice.R") ## used for plotting
+source("functions_udev.R") ## used to calculate U-deivation using PLSR model
 
 
 ###step 1: extract MIR spectra(opus format) from KSSL database for all soil properties using simplerspec
@@ -106,6 +107,8 @@ fit.rf.untrans.oc <- ranger(Y1~., data = tmp.calib, quantreg=TRUE, keep.inbag=TR
 val.pred <- predict(fit.rf.untrans.oc, data = sub.valid.oc$spc, type = "se")
 
 ## Spectrum based learner model  -- only untransformed OC shown
+## Note: make sure to load the files in mbl subfolder to output uncertainty estimates for each new prediction in the validation sets
+## currently uncertainty are provided only when valMethod = 'loc_crossval' is used when building MBL models
 Xu <- sub.valid.oc$spc
 Yu <- sub.valid.oc$oc 
 Yr <- sub.calib.oc$oc
@@ -246,106 +249,34 @@ hexbinplot(test[[1]]$obs~test[[1]]$pred, colramp=rf, main="",
            colorcut=c(0,0.005,0.01,0.03,0.07,0.15,0.25,0.5,1),panel=pfun.lm)
 dev.off() 
 
-## step 11: calculate u-deviation based on PLSR model
+## step 11: calculate u-deviation based on PLSR model -- only organic carbon shown
 ## Udeviation based on local model and random forest model are included in the model output
-## set wd to directory where plsr model outputs are available
-setwd("C:/Users/sdangal/Documents/ModelChoice_17SEPT2018/newResults/process_pls")
-files <- list.files(getwd(), pattern = "\\.RData", full.names=TRUE)
+#11a: arrange data as required by functions to predict ydev
+x.cal.scores <- fit.TOC$scores
+x.val.scores <- predict(fit.TOC, newdata = valid.mas$spc, type = "scores")
+y.val.pred <- predict(fit.TOC, newdata = valid.mas$spc)
+y.val.pred <- y.val.pred[,1,]
+loadings <- fit.TOC$loadings
+x.val <- valid.mas$spc
+obs.TOC <- valid.mas$sqrt_TOC
+ncalobj <- 230 #number of calibration object
 
-##read calib data
-cal.data <- list.files("C:/Users/sdangal/Documents/ModelChoice_17SEPT2018/full_data_trun6000", pattern ="calib", full.names=TRUE)
+#11b . #get leverage
+Hi <- getLeverage(x.cal.scores, x.val.scores)
 
-##read calib scores
-temp <- lapply(files, function(x) mget(load(x)))
-cal <- lapply(cal.data, function(x) mget(load(x)))
-x.cal.scores <- lapply(1:length(temp), function(x){
-  temp[[x]][[1]]$scores
-})
+#11c. Get ResXvalSamppred
+ResXValSamp <- getResXValSamp(valid.mas$spc, calib.mas$spc, x.val.scores, loadings)
 
-##read loadings data
-loadings <- lapply(1:length(temp), function(x){
-  temp[[x]][[1]]$loadings
-})
+#11d. GetResXValTot -- single values corresponding to each component-- get this from calibration set
+## Unscrambler uses cross-validation sets to derive this
+ResXValTot <- getTotResXCal(calib.mas$spc, x.cal.scores, loadings)
 
-#read cal spc
-x.cal.spc <- lapply(1:length(temp), function(x){
-  cal[[x]][[1]]$spc
-})
+#11e. ResYValVar
+##  is the y-residual variance calculated from the cross validation sets
+ResYValVar <- MSEP(fit.TOC, intercept=FALSE)$val[1,1,]
 
-##Read valid data
-val.data <- list.files("C:/Users/sdangal/Documents/ModelChoice_17SEPT2018/full_data_trun6000", pattern ="valid", full.names=TRUE)
+#11f get udeviation
+udev <- getYdev(ResYValVar, ResXValSamp, ResXValTot, Hi, ncalobj)
 
-#Read x.val.scores
-val <- lapply(val.data, function(x) mget(load(x)))
-x.val.scores <- lapply(1:length(temp), function(x){
-  predict(temp[[x]][[1]], newdata = val[[x]][[1]]$spc, type = "scores")
-})
-
-#Read y.val.pred
-y.val.pred <- lapply(1:length(temp), function(x){
-  predict(temp[[x]][[1]], newdata = val[[x]][[1]]$spc)
-})
-
-## read valid spc
-x.val.spc <- lapply(1:length(temp), function(x){
-  val[[x]][[1]]$spc
-}) 
-
-##define pred variable names
-#val.data
-pred.var.names <- c("al", "bd", "ca", "cec", "clay", "co3", "fe", "OC", "ocden", "ph")
-
-#get observed values of validation samples
-val.obs <- lapply(1:length(temp), function(x){
-  sqrt(val[[x]][[1]][pred.var.names[x]])
-})
-
-##this step is critical to ensure that there are no NA's values in the observations
-val.pred.revised <- lapply(1:length(temp), function(x){
-  y.val.pred[[x]][!is.na(val.obs[[x]]),,]
-})
-
-val.obs.revised <- lapply(1:length(temp), function(x){
-  val.obs[[x]][!is.na(val.obs[[x]])]
-})
-
-#### start estimating prediction interval using PLSR model
-#1 get XvalSampleVar and XValSampleTot
-ResXValSamp <- lapply(1:length(temp), function(x){
-  getResXValSamp(x.val.spc[[x]], x.cal.spc[[x]], x.val.scores[[x]], loadings[[x]])
-})
-
-ResXValTot <- lapply(1:length(temp), function(x){
-  colMeans(ResXValSamp[[x]])
-})
-
-#2 Get ResYValVar -- residual variance for response variable in validation sets
-#need observed and predicted values to calculate ResYValVar
-ResYValVar <- lapply(1:length(temp), function(x){
-  getResYValVar(val.obs.revised[[x]], val.pred.revised[[x]])
-})
-
-
-#3 Leverage
-Hi <- lapply(1:length(temp), function(x){
-  getLeverage(x.cal.scores[[x]], x.val.scores[[x]])
-})
-
-#4 Number of calibration object
-nobj <- lapply(1:length(temp), function(x){
-  dim(x.cal.spc[[x]])[1]
-})
-
-#5 compute Y-dev
-ydev <- lapply(1:length(temp), function(x){
-  getYdev(ResYValVar[[x]], ResXValSamp[[x]], ResXValTot[[x]], Hi[[x]], nobj[[x]])
-})
-
-names(ydev) <- pred.var.names
-for(i in 1:length(ydev)){
-  write.csv(ydev[i], file = paste0(names(ydev[i]), ".udev.csv"))
-}
-
-
-##Step 12: flagging samples that are untrustworthy
-## see fratio_plsr, fratio_sbl and reld_rf.R scripts to assess the trustworthines of new prediction
+##Step 12: Flagging of untrustworthy samples (outliers) using F-ratio (PLSR and MBL) and Relative Deviation (Random Forest)
+## refer to fratio_mbl and fratio_plsr and reld_rf scripts
