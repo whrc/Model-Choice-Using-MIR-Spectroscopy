@@ -4,4 +4,4 @@
  ![locations of all pedons used to develop MIR models](https://github.com/whrc/Model-Choice-Using-MIR-Spectroscopy/blob/master/Figure.jpg)
  
 Please cite the manuscript as follows:
-Dangal, SRS, J. Sanderman, S. Wills, L. Ramirez-Lopez (2019) "Accurate and precise prediction of soil properties from a large mid infrared spectral library" In press (Soil Systems).
+Dangal, S.R.S., Sanderman, J., Wills, S., Ramirez-Lopez, L. Accurate and Precise Prediction of Soil Properties from a Large Mid-Infrared Spectral Library. Soil Syst. 2019, 3, 11.
